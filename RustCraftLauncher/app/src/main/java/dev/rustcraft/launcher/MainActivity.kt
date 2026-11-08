@@ -11,6 +11,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
+// Временный статический список. В M1 его заменит официальный манифест версий Mojang.
+private val MINECRAFT_VERSIONS = listOf(
+    // 1.21.x
+    "1.21.8", "1.21.7", "1.21.6", "1.21.5", "1.21.4", "1.21.3", "1.21.1", "1.21",
+    // 1.20.x
+    "1.20.6", "1.20.4", "1.20.2", "1.20.1", "1.20",
+    // 1.19.x
+    "1.19.4", "1.19.3", "1.19.2", "1.19",
+    // 1.18.x
+    "1.18.2", "1.18.1", "1.18",
+    // 1.17.x
+    "1.17.1", "1.17",
+    // 1.16.x
+    "1.16.5", "1.16.4", "1.16.1",
+    // 1.15.x – 1.12.x
+    "1.15.2", "1.14.4", "1.13.2", "1.12.2",
+    // старые популярные
+    "1.8.9", "1.7.10"
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,7 +97,7 @@ private fun VersionSelector(value: String, onChange: (String) -> Unit) {
     Box {
         OutlinedButton(onClick = { expanded = true }) { Text(value) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            listOf("1.21.1", "1.20.1", "1.19.2", "1.18.2", "1.16.5").forEach { v ->
+            MINECRAFT_VERSIONS.forEach { v ->
                 DropdownMenuItem(text = { Text(v) }, onClick = {
                     onChange(v); expanded = false
                 })
