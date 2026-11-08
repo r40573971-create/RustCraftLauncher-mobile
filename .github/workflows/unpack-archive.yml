@@ -1,0 +1,33 @@
+name: Unpack RustCraft archive
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unpack project archive
+        run: |
+          unzip -q RustCraftLauncher-phone-dev-v0.2.zip -d extracted
+          cp -a extracted/. .
+          rm -rf extracted
+          rm -f RustCraftLauncher-phone-dev-v0.2.zip
+
+      - name: Commit extracted files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "Extract RustCraft Launcher project"
+            git push
+          fi
+          
