@@ -1,0 +1,35 @@
+
+name: Organize RustCraft project
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  organize:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Move project files
+        run: |
+          if [ ! -d "RustCraftLauncher" ]; then
+            echo "Project folder not found"
+            exit 1
+          fi
+
+          cp -a RustCraftLauncher/. .
+          rm -rf RustCraftLauncher
+
+      - name: Save changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Organize RustCraft project files"
+          git push
+          
