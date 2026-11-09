@@ -11,12 +11,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlin.concurrent.thread
 
 private const val MANIFEST_URL =
     "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+
+private data class VersionInfo(val id: String, val url: String)
 
 // Запасной список на случай, если нет сети или Rust-библиотека не загрузилась.
 private val FALLBACK_VERSIONS = listOf(
@@ -30,26 +30,15 @@ private val FALLBACK_VERSIONS = listOf(
     "1.8.9", "1.7.10"
 )
 
-private fun downloadManifest(): String {
-    val connection = URL(MANIFEST_URL).openConnection() as HttpURLConnection
-    connection.connectTimeout = 10_000
-    connection.readTimeout = 15_000
-    try {
-        if (connection.responseCode != 200) {
-            throw IllegalStateException("HTTP ${connection.responseCode}")
-        }
-        return connection.inputStream.bufferedReader().use { it.readText() }
-    } finally {
-        connection.disconnect()
-    }
-}
-
 /** Разбор манифеста выполняет Rust. Возвращает null при любой ошибке. */
-private fun parseWithRust(json: String, includeSnapshots: Boolean): List<String>? {
+private fun parseWithRust(json: String, includeSnapshots: Boolean): List<VersionInfo>? {
     val response = JSONObject(RustBridge.parseVersions(json, includeSnapshots))
     if (!response.optBoolean("ok")) return null
     val array = response.getJSONArray("versions")
-    return List(array.length()) { index -> array.getJSONObject(index).getString("id") }
+    return List(array.length()) { index ->
+        val item = array.getJSONObject(index)
+        VersionInfo(item.getString("id"), item.getString("url"))
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -72,14 +61,14 @@ private fun RustCraftApp() {
     LaunchedEffect(Unit) {
         thread {
             try {
-                manifestJson = downloadManifest()
+                manifestJson = httpGetText(MANIFEST_URL)
             } catch (_: Exception) {
                 loadFailed = true
             }
         }
     }
 
-    val rustVersions: List<String>? = remember(manifestJson, showSnapshots) {
+    val rustVersions: List<VersionInfo>? = remember(manifestJson, showSnapshots) {
         val json = manifestJson
         if (json != null && RustBridge.isLoaded) {
             runCatching { parseWithRust(json, showSnapshots) }.getOrNull()
@@ -87,12 +76,13 @@ private fun RustCraftApp() {
             null
         }
     }
-    val versions = rustVersions ?: FALLBACK_VERSIONS
+    val versionIds = rustVersions?.map { it.id } ?: FALLBACK_VERSIONS
+    val selectedUrl = rustVersions?.firstOrNull { it.id == selectedVersion }?.url
 
     val versionsStatus = when {
-        rustVersions != null -> "${versions.size} версий с серверов Mojang (разбор в Rust)"
-        loadFailed -> "нет сети — встроенный список (${versions.size})"
-        manifestJson != null -> "Rust не загружен — встроенный список (${versions.size})"
+        rustVersions != null -> "${versionIds.size} версий с серверов Mojang (разбор в Rust)"
+        loadFailed -> "нет сети — встроенный список (${versionIds.size})"
+        manifestJson != null -> "Rust не загружен — встроенный список (${versionIds.size})"
         else -> "загрузка списка версий…"
     }
 
@@ -111,7 +101,7 @@ private fun RustCraftApp() {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Игровой профиль", style = MaterialTheme.typography.titleLarge)
                             Text("Версия Minecraft")
-                            VersionSelector(versions, selectedVersion) { selectedVersion = it }
+                            VersionSelector(versionIds, selectedVersion) { selectedVersion = it }
                             Text(
                                 versionsStatus,
                                 style = MaterialTheme.typography.bodySmall,
@@ -128,6 +118,9 @@ private fun RustCraftApp() {
                     }
                 }
                 item {
+                    DownloadCard(versionId = selectedVersion, versionUrl = selectedUrl)
+                }
+                item {
                     Card {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Устройство", style = MaterialTheme.typography.titleLarge)
@@ -138,12 +131,12 @@ private fun RustCraftApp() {
                 }
                 item {
                     Button(
-                        onClick = { /* Actual launch is intentionally not wired in milestone 0.1. */ },
+                        onClick = { /* Запуск игры появится после M3 (Java) и M4 (графика). */ },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = false
                     ) { Text("Запуск — следующий этап разработки") }
                     Text(
-                        "Пока это интерфейс, список версий и проверка Rust/JNI. Игровой runtime ещё не подключён.",
+                        "Сейчас можно скачать файлы игры. Java и графика для запуска ещё не подключены.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

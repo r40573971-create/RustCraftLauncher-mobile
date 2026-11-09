@@ -17,6 +17,19 @@ object RustBridge {
      */
     external fun parseVersions(json: String, includeSnapshots: Boolean): String
 
+    /**
+     * M2: JSON конкретной версии -> план скачивания.
+     * {"ok":true,"id","mainClass","javaMajor","assetIndex":{...},"totalBytes",
+     *  "files":[{"url","path","sha1","size","kind"}...]} или {"ok":false,"error":"..."}.
+     */
+    external fun planVersion(json: String): String
+
+    /**
+     * M2: индекс ресурсов -> план скачивания ресурсов.
+     * {"ok":true,"legacy":false,"totalBytes","files":[...]} или {"ok":false,"error":"..."}.
+     */
+    external fun planAssets(json: String): String
+
     fun status(): String = if (isLoaded) {
         runCatching { coreVersion() }.getOrDefault("loaded, JNI call failed")
     } else {
