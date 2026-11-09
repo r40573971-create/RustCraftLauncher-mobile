@@ -118,6 +118,16 @@ private fun RustCraftApp() {
                     }
                 }
                 item {
+                    ProfilesCard(
+                        currentVersion = selectedVersion,
+                        currentLoader = selectedLoader,
+                        onSelect = { profile ->
+                            selectedVersion = profile.minecraftVersion
+                            selectedLoader = profile.loader
+                        }
+                    )
+                }
+                item {
                     DownloadCard(versionId = selectedVersion, versionUrl = selectedUrl)
                 }
                 item {

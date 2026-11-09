@@ -30,6 +30,18 @@ object RustBridge {
      */
     external fun planAssets(json: String): String
 
+    /** Профили: прочитать файл. {"ok":true,"profiles":[...],"error":null} или {"ok":false,...}. */
+    external fun profilesNormalize(json: String): String
+
+    /** Профили: добавить или заменить профиль (listJson — текущий список, profileJson — профиль). */
+    external fun profilesUpsert(listJson: String, profileJson: String): String
+
+    /** Профили: удалить профиль по id. */
+    external fun profilesDelete(listJson: String, id: String): String
+
+    /** Какая Java обычно нужна версии Minecraft (запасная оценка для нового профиля). */
+    external fun suggestJava(version: String): Int
+
     fun status(): String = if (isLoaded) {
         runCatching { coreVersion() }.getOrDefault("loaded, JNI call failed")
     } else {
