@@ -3,6 +3,8 @@ use jni::sys::{jboolean, jstring};
 use jni::JNIEnv;
 use serde::{Deserialize, Serialize};
 
+mod plan;
+
 // ---------------------------------------------------------------------------
 // Профили
 // ---------------------------------------------------------------------------
@@ -144,7 +146,7 @@ pub extern "system" fn Java_dev_rustcraft_launcher_RustBridge_coreVersion<'local
     _class: JClass<'local>,
 ) -> jstring {
     let value = env
-        .new_string("RustCraft Core 0.1.0 (M1)")
+        .new_string("RustCraft Core 0.2.0 (M2)")
         .expect("JNI string");
     value.into_raw()
 }
@@ -162,6 +164,39 @@ pub extern "system" fn Java_dev_rustcraft_launcher_RustBridge_parseVersions<'loc
     };
     let output = versions_response(&input, include_snapshots != 0);
     env.new_string(output).expect("JNI string").into_raw()
+}
+
+fn run_json_call<'local>(
+    env: &mut JNIEnv<'local>,
+    json: &JString<'local>,
+    handler: fn(&str) -> String,
+) -> jstring {
+    let input: String = match env.get_string(json) {
+        Ok(s) => s.into(),
+        Err(_) => String::new(),
+    };
+    let output = handler(&input);
+    env.new_string(output).expect("JNI string").into_raw()
+}
+
+/// M2: JSON версии -> план скачивания (клиент, библиотеки, индекс ресурсов).
+#[no_mangle]
+pub extern "system" fn Java_dev_rustcraft_launcher_RustBridge_planVersion<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    json: JString<'local>,
+) -> jstring {
+    run_json_call(&mut env, &json, plan::plan_version_response)
+}
+
+/// M2: индекс ресурсов -> план скачивания ресурсов.
+#[no_mangle]
+pub extern "system" fn Java_dev_rustcraft_launcher_RustBridge_planAssets<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    json: JString<'local>,
+) -> jstring {
+    run_json_call(&mut env, &json, plan::plan_assets_response)
 }
 
 // ---------------------------------------------------------------------------
