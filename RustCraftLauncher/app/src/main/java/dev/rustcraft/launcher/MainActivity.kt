@@ -122,27 +122,6 @@ private fun RustCraftApp() {
                     Text("Minecraft Java launcher · Android", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 item {
-                    Card {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Игровой профиль", style = MaterialTheme.typography.titleLarge)
-                            Text("Версия Minecraft")
-                            VersionSelector(versionIds, selectedVersion) { selectedVersion = it }
-                            Text(
-                                versionsStatus,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Switch(checked = showSnapshots, onCheckedChange = { showSnapshots = it })
-                                Spacer(Modifier.width(8.dp))
-                                Text("Показывать снапшоты")
-                            }
-                            Text("Загрузчик модов")
-                            LoaderSelector(selectedLoader) { selectedLoader = it }
-                        }
-                    }
-                }
-                item {
                     ProfilesCard(
                         currentVersion = selectedVersion,
                         currentLoader = selectedLoader,
