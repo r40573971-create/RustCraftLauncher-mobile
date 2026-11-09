@@ -14,15 +14,16 @@ import kotlin.concurrent.thread
  * так что внешний вид можно полностью заменить своим.
  */
 @Composable
-fun DownloadCard(versionId: String, versionUrl: String?) {
+fun DownloadCard(versionId: String, versionUrl: String?, showCard: Boolean = true, buttonLabel: String = "Скачать $versionId") {
     val context = LocalContext.current
     var progress by remember { mutableStateOf<DownloadProgress?>(null) }
     var status by remember { mutableStateOf("") }
     var running by remember { mutableStateOf(false) }
     var downloader by remember { mutableStateOf<GameDownloader?>(null) }
 
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    @Composable
+    fun Content() {
+        Column(Modifier.padding(if (showCard) 16.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Загрузка игры", style = MaterialTheme.typography.titleLarge)
             Text(
                 "Версия $versionId скачается в память приложения. Это может занять " +
@@ -74,7 +75,7 @@ fun DownloadCard(versionId: String, versionUrl: String?) {
                             }
                         }
                     }
-                ) { Text("Скачать $versionId") }
+                ) { Text(buttonLabel) }
 
                 if (running) {
                     OutlinedButton(onClick = { downloader?.cancel() }) { Text("Отмена") }
@@ -82,6 +83,7 @@ fun DownloadCard(versionId: String, versionUrl: String?) {
             }
         }
     }
+    if (showCard) Card { Content() } else Content()
 }
 
 private fun mb(bytes: Long): String = "%.1f".format(bytes / 1_048_576.0)
