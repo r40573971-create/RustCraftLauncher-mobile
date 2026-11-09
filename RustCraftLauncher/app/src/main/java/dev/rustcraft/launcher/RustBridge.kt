@@ -1,7 +1,7 @@
 package dev.rustcraft.launcher
 
 object RustBridge {
-    private val loaded: Boolean = try {
+    val isLoaded: Boolean = try {
         System.loadLibrary("rustcraft_core")
         true
     } catch (_: UnsatisfiedLinkError) {
@@ -10,7 +10,14 @@ object RustBridge {
 
     external fun coreVersion(): String
 
-    fun status(): String = if (loaded) {
+    /**
+     * Разбирает version_manifest_v2.json в Rust.
+     * Возвращает JSON: {"ok":true,"versions":[{"id","kind","url"}...],"error":null}
+     * или {"ok":false,"versions":[],"error":"..."}.
+     */
+    external fun parseVersions(json: String, includeSnapshots: Boolean): String
+
+    fun status(): String = if (isLoaded) {
         runCatching { coreVersion() }.getOrDefault("loaded, JNI call failed")
     } else {
         "not built yet"
