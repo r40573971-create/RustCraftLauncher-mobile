@@ -156,7 +156,7 @@ class GameDownloader(root: File) {
         fun report(force: Boolean) {
             val now = System.currentTimeMillis()
             val previous = lastReport.get()
-            if (force || (now - previous >= 150 && lastReport.compareAndSet(previous, now))) {
+            if (force || (now - previous >= 400 && lastReport.compareAndSet(previous, now))) {
                 onProgress(
                     DownloadProgress(
                         doneFiles.get(), files.size, doneBytes.get(), totalBytes, "Скачивание…"
@@ -166,7 +166,13 @@ class GameDownloader(root: File) {
         }
 
         report(true)
-        val pool = Executors.newFixedThreadPool(6)
+        // 4 потока с фоновым приоритетом, чтобы интерфейс не лагал.
+        val pool = Executors.newFixedThreadPool(4) { task ->
+            Thread {
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+                task.run()
+            }
+        }
         try {
             val futures = files.map { file ->
                 pool.submit(Callable<Unit> {
