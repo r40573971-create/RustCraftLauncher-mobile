@@ -1,9 +1,10 @@
 use jni::objects::{JClass, JString};
-use jni::sys::{jboolean, jstring};
+use jni::sys::{jboolean, jint, jstring};
 use jni::JNIEnv;
 use serde::{Deserialize, Serialize};
 
 mod plan;
+mod profiles;
 
 // ---------------------------------------------------------------------------
 // Профили
@@ -38,12 +39,28 @@ pub enum ProfileError {
     InvalidMemory,
     #[error("render distance must be between 2 and 64 chunks")]
     InvalidRenderDistance,
+    #[error("profile name must be 1-32 characters: letters, digits, space, '-', '_' or '.'")]
+    InvalidId,
+}
+
+/// Имя профиля потом станет частью пути на диске, поэтому набор символов узкий.
+fn is_valid_profile_id(id: &str) -> bool {
+    let length = id.chars().count();
+    (1..=32).contains(&length)
+        && id == id.trim()
+        && !id.starts_with('.')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_' | '.'))
 }
 
 impl GameProfile {
     pub fn validate(&self) -> Result<(), ProfileError> {
         if self.id.trim().is_empty() {
             return Err(ProfileError::EmptyId);
+        }
+        if !is_valid_profile_id(&self.id) {
+            return Err(ProfileError::InvalidId);
         }
         if !(8..=25).contains(&self.java_major) {
             return Err(ProfileError::UnsupportedJava);
@@ -197,6 +214,70 @@ pub extern "system" fn Java_dev_rustcraft_launcher_RustBridge_planAssets<'local>
     json: JString<'local>,
 ) -> jstring {
     run_json_call(&mut env, &json, plan::plan_assets_response)
+}
+
+fn run_json_call2<'local>(
+    env: &mut JNIEnv<'local>,
+    first: &JString<'local>,
+    second: &JString<'local>,
+    handler: fn(&str, &str) -> String,
+) -> jstring {
+    let a: String = match env.get_string(first) {
+        Ok(s) => s.into(),
+        Err(_) => String::new(),
+    };
+    let b: String = match env.get_string(second) {
+        Ok(s) => s.into(),
+        Err(_) => String::new(),
+    };
+    let output = handler(&a, &b);
+    env.new_string(output).expect("JNI string").into_raw()
+}
+
+/// Профили: прочитать файл (отбросить мусор и повторы).
+#[no_mangle]
+pub extern "system" fn Java_dev_rustcraft_launcher_RustBridge_profilesNormalize<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    json: JString<'local>,
+) -> jstring {
+    run_json_call(&mut env, &json, profiles::normalize_response)
+}
+
+/// Профили: добавить или заменить профиль в списке.
+#[no_mangle]
+pub extern "system" fn Java_dev_rustcraft_launcher_RustBridge_profilesUpsert<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    list_json: JString<'local>,
+    profile_json: JString<'local>,
+) -> jstring {
+    run_json_call2(&mut env, &list_json, &profile_json, profiles::upsert_response)
+}
+
+/// Профили: удалить профиль по id.
+#[no_mangle]
+pub extern "system" fn Java_dev_rustcraft_launcher_RustBridge_profilesDelete<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    list_json: JString<'local>,
+    id: JString<'local>,
+) -> jstring {
+    run_json_call2(&mut env, &list_json, &id, profiles::delete_response)
+}
+
+/// Какая Java обычно нужна версии Minecraft (для нового профиля).
+#[no_mangle]
+pub extern "system" fn Java_dev_rustcraft_launcher_RustBridge_suggestJava<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    version: JString<'local>,
+) -> jint {
+    let input: String = match env.get_string(&version) {
+        Ok(s) => s.into(),
+        Err(_) => String::new(),
+    };
+    profiles::suggest_java(&input) as jint
 }
 
 // ---------------------------------------------------------------------------
