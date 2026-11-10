@@ -1,4 +1,3 @@
-
 package dev.rustcraft.launcher
 
 import org.json.JSONArray
@@ -12,38 +11,33 @@ data class FabricLoaderVersion(
 )
 
 object FabricMeta {
-
     private const val BASE_URL = "https://meta.fabricmc.net/v2"
+    private const val CONNECT_TIMEOUT_MS = 30_000
+    private const val READ_TIMEOUT_MS = 30_000
 
     fun getLoaderVersions(minecraftVersion: String): List<FabricLoaderVersion> {
         val encodedVersion = URLEncoder.encode(minecraftVersion, "UTF-8")
             .replace("+", "%20")
-
         val url = "$BASE_URL/versions/loader/$encodedVersion"
         val connection = URL(url).openConnection() as HttpURLConnection
 
         try {
             connection.requestMethod = "GET"
-            connection.connectTimeout = 15000
-            connection.readTimeout = 15000
+            connection.connectTimeout = CONNECT_TIMEOUT_MS
+            connection.readTimeout = READ_TIMEOUT_MS
             connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("User-Agent", "VortexLauncher/0.1.0")
 
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                throw IllegalStateException(
-                    "Fabric API: HTTP ${connection.responseCode}"
-                )
+            val responseCode = connection.responseCode
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                throw IllegalStateException("Fabric API: HTTP $responseCode")
             }
 
-            val json = connection.inputStream.bufferedReader().use {
-                it.readText()
-            }
-
+            val json = connection.inputStream.bufferedReader().use { it.readText() }
             val array = JSONArray(json)
 
             return List(array.length()) { index ->
-                val loader = array.getJSONObject(index)
-                    .getJSONObject("loader")
-
+                val loader = array.getJSONObject(index).getJSONObject("loader")
                 FabricLoaderVersion(
                     version = loader.getString("version"),
                     stable = loader.optBoolean("stable", false)
@@ -54,4 +48,3 @@ object FabricMeta {
         }
     }
 }
-
