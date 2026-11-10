@@ -189,7 +189,43 @@ private fun RustCraftApp() {
 }
 
 @Composable
-private fun InstallDialog(
+private fun InstallDialog(    var fabricVersions by remember {
+        mutableStateOf<List<FabricLoaderVersion>>(emptyList())
+    }
+    var selectedFabricVersion by remember {
+        mutableStateOf("")
+    }
+    var fabricLoading by remember { mutableStateOf(false) }
+    var fabricError by remember { mutableStateOf("") }
+
+    LaunchedEffect(selectedVersion, selectedLoader) {
+        if (selectedLoader == "Fabric") {
+            fabricLoading = true
+            fabricError = ""
+            fabricVersions = emptyList()
+            selectedFabricVersion = ""
+
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    FabricMeta.getLoaderVersions(selectedVersion)
+                }
+                fabricVersions = result
+                selectedFabricVersion = result.firstOrNull()?.version ?: ""
+                if (result.isEmpty()) {
+                    fabricError = "Совместимые версии Fabric не найдены"
+                }
+            } catch (e: Exception) {
+                fabricError = e.message ?: "Не удалось получить версии Fabric"
+            } finally {
+                fabricLoading = false
+            }
+        } else {
+            fabricVersions = emptyList()
+            selectedFabricVersion = ""
+            fabricError = ""
+        }
+    }
+    
     versions: List<String>, selectedVersion: String, selectedLoader: String,
     filter: String, versionUrl: String?, onVersionChange: (String) -> Unit,
     onLoaderChange: (String) -> Unit, onFilterChange: (String) -> Unit,
