@@ -1,5 +1,3 @@
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 package dev.rustcraft.launcher
 
 import android.os.Bundle
@@ -14,6 +12,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import kotlin.concurrent.thread
 
@@ -22,7 +22,6 @@ private const val MANIFEST_URL =
 
 private data class VersionInfo(val id: String, val url: String, val kind: String = "release")
 
-// Запасной список на случай, если нет сети или Rust-библиотека не загрузилась.
 private val FALLBACK_VERSIONS = listOf(
     "1.21.8", "1.21.7", "1.21.6", "1.21.5", "1.21.4", "1.21.3", "1.21.1", "1.21",
     "1.20.6", "1.20.4", "1.20.2", "1.20.1", "1.20",
@@ -34,7 +33,6 @@ private val FALLBACK_VERSIONS = listOf(
     "1.8.9", "1.7.10"
 )
 
-/** Разбор манифеста выполняет Rust. Возвращает null при любой ошибке. */
 private fun parseWithRust(json: String, includeSnapshots: Boolean): List<VersionInfo>? {
     val response = JSONObject(RustBridge.parseVersions(json, includeSnapshots))
     if (!response.optBoolean("ok")) return null
@@ -61,7 +59,6 @@ private fun RustCraftApp() {
     var showInstallDialog by remember { mutableStateOf(false) }
     var installFilter by remember { mutableStateOf("Release") }
     var installLoader by remember { mutableStateOf("Vanilla") }
-
     var manifestJson by remember { mutableStateOf<String?>(null) }
     var loadFailed by remember { mutableStateOf(false) }
 
@@ -79,12 +76,9 @@ private fun RustCraftApp() {
         val json = manifestJson
         if (json != null && RustBridge.isLoaded) {
             runCatching { parseWithRust(json, showSnapshots) }.getOrNull()
-        } else {
-            null
-        }
+        } else null
     }
     val versionIds = rustVersions?.map { it.id } ?: FALLBACK_VERSIONS
-    // Для окна установки читаем типы версий непосредственно из официального манифеста Mojang.
     val allManifestVersions = remember(manifestJson) {
         runCatching {
             val array = JSONObject(manifestJson ?: "{}").optJSONArray("versions")
@@ -105,13 +99,6 @@ private fun RustCraftApp() {
     val installVersionUrl = installVersions.firstOrNull { it.id == selectedVersion }?.url
         ?: allManifestVersions.firstOrNull { it.id == selectedVersion }?.url
         ?: selectedUrl
-
-    val versionsStatus = when {
-        rustVersions != null -> "${versionIds.size} версий с серверов Mojang (разбор в Rust)"
-        loadFailed -> "нет сети — встроенный список (${versionIds.size})"
-        manifestJson != null -> "Rust не загружен — встроенный список (${versionIds.size})"
-        else -> "загрузка списка версий…"
-    }
 
     MaterialTheme(colorScheme = darkColorScheme()) {
         Scaffold { padding ->
@@ -189,12 +176,14 @@ private fun RustCraftApp() {
 }
 
 @Composable
-private fun InstallDialog(    var fabricVersions by remember {
-        mutableStateOf<List<FabricLoaderVersion>>(emptyList())
-    }
-    var selectedFabricVersion by remember {
-        mutableStateOf("")
-    }
+private fun InstallDialog(
+    versions: List<String>, selectedVersion: String, selectedLoader: String,
+    filter: String, versionUrl: String?, onVersionChange: (String) -> Unit,
+    onLoaderChange: (String) -> Unit, onFilterChange: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var fabricVersions by remember { mutableStateOf<List<FabricLoaderVersion>>(emptyList()) }
+    var selectedFabricVersion by remember { mutableStateOf("") }
     var fabricLoading by remember { mutableStateOf(false) }
     var fabricError by remember { mutableStateOf("") }
 
@@ -204,16 +193,13 @@ private fun InstallDialog(    var fabricVersions by remember {
             fabricError = ""
             fabricVersions = emptyList()
             selectedFabricVersion = ""
-
             try {
                 val result = withContext(Dispatchers.IO) {
                     FabricMeta.getLoaderVersions(selectedVersion)
                 }
                 fabricVersions = result
                 selectedFabricVersion = result.firstOrNull()?.version ?: ""
-                if (result.isEmpty()) {
-                    fabricError = "Совместимые версии Fabric не найдены"
-                }
+                if (result.isEmpty()) fabricError = "Совместимые версии Fabric не найдены"
             } catch (e: Exception) {
                 fabricError = e.message ?: "Не удалось получить версии Fabric"
             } finally {
@@ -225,14 +211,11 @@ private fun InstallDialog(    var fabricVersions by remember {
             fabricError = ""
         }
     }
-    
-    versions: List<String>, selectedVersion: String, selectedLoader: String,
-    filter: String, versionUrl: String?, onVersionChange: (String) -> Unit,
-    onLoaderChange: (String) -> Unit, onFilterChange: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss,
-        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Card(
             modifier = Modifier.fillMaxWidth().fillMaxHeight(0.94f).padding(horizontal = 14.dp),
             shape = MaterialTheme.shapes.extraLarge,
@@ -266,7 +249,10 @@ private fun InstallDialog(    var fabricVersions by remember {
                             }
                         }
                     }
-                    Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         listOf("Release", "Snapshot", "Old Beta", "Old Alpha").forEach { type ->
                             FilterChip(selected = filter == type, onClick = { onFilterChange(type) }, label = { Text(type) })
                         }
@@ -310,16 +296,56 @@ private fun InstallDialog(    var fabricVersions by remember {
                 }
                 item {
                     Text("Версия загрузчика", style = MaterialTheme.typography.titleMedium)
-                    OutlinedButton(onClick = {}, modifier = Modifier.fillMaxWidth(), enabled = false) {
-                        Text(if (selectedLoader == "Vanilla") "Не требуется" else "Последняя совместимая — каталог будет добавлен")
+                    when {
+                        selectedLoader == "Vanilla" -> Text("Не требуется")
+                        selectedLoader == "Fabric" && fabricLoading -> {
+                            CircularProgressIndicator()
+                            Text("Загружаем совместимые версии Fabric…")
+                        }
+                        selectedLoader == "Fabric" && fabricError.isNotEmpty() -> {
+                            Text(fabricError, color = MaterialTheme.colorScheme.error)
+                        }
+                        selectedLoader == "Fabric" && fabricVersions.isNotEmpty() -> {
+                            var expanded by remember { mutableStateOf(false) }
+                            Box {
+                                OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(selectedFabricVersion.ifEmpty { "Выбери версию" }, modifier = Modifier.weight(1f))
+                                    Text("⌄")
+                                }
+                                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                    fabricVersions.forEach { version ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(version.version + if (version.stable) " · Stable" else "")
+                                            },
+                                            onClick = {
+                                                selectedFabricVersion = version.version
+                                                expanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        else -> Text("Каталог этого загрузчика добавим следующим этапом.")
                     }
                 }
                 item {
                     if (selectedLoader == "Vanilla") {
-                        DownloadCard(versionId = selectedVersion, versionUrl = versionUrl, showCard = false, buttonLabel = "Скачать и установить")
+                        DownloadCard(
+                            versionId = selectedVersion,
+                            versionUrl = versionUrl,
+                            showCard = false,
+                            buttonLabel = "Скачать и установить"
+                        )
                     } else {
-                        Text("Выбор $selectedLoader уже доступен. Установка этого загрузчика будет добавлена следующим этапом; сейчас скачивание доступно для Vanilla.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) { Text("Скачать и установить") }
+                        Text(
+                            "Выбор $selectedLoader уже доступен. Установка этого загрузчика будет добавлена следующим этапом; сейчас скачивание доступно для Vanilla.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
+                            Text("Скачать и установить")
+                        }
                     }
                 }
             }
@@ -334,9 +360,7 @@ private fun VersionSelector(versions: List<String>, value: String, onChange: (St
         OutlinedButton(onClick = { expanded = true }) { Text(value) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             versions.forEach { v ->
-                DropdownMenuItem(text = { Text(v) }, onClick = {
-                    onChange(v); expanded = false
-                })
+                DropdownMenuItem(text = { Text(v) }, onClick = { onChange(v); expanded = false })
             }
         }
     }
@@ -349,9 +373,7 @@ private fun LoaderSelector(value: String, onChange: (String) -> Unit) {
         OutlinedButton(onClick = { expanded = true }) { Text(value) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             listOf("Vanilla", "NeoForge", "Forge", "Fabric").forEach { loader ->
-                DropdownMenuItem(text = { Text(loader) }, onClick = {
-                    onChange(loader); expanded = false
-                })
+                DropdownMenuItem(text = { Text(loader) }, onClick = { onChange(loader); expanded = false })
             }
         }
     }
