@@ -1,9 +1,9 @@
-
 package dev.rustcraft.launcher
 
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
@@ -53,6 +53,39 @@ object FabricMeta {
                     stable = loader.optBoolean("stable", false)
                 )
             }
+        }
+    }
+
+    /**
+     * Загружает полный профиль Fabric для выбранной версии Minecraft
+     * и версии загрузчика. Профиль содержит mainClass и библиотеки
+     * для последующей установки Fabric.
+     */
+    fun getLoaderProfile(
+        minecraftVersion: String,
+        loaderVersion: String
+    ): JSONObject {
+        val game = URLEncoder.encode(minecraftVersion, "UTF-8")
+            .replace("+", "%20")
+        val loader = URLEncoder.encode(loaderVersion, "UTF-8")
+            .replace("+", "%20")
+
+        val request = Request.Builder()
+            .url("$BASE_URL/versions/loader/$game/$loader/profile/json")
+            .header("Accept", "application/json")
+            .header("User-Agent", "VortexLauncher/0.1.0")
+            .get()
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("Fabric profile: HTTP ${response.code}")
+            }
+
+            val body = response.body?.string()
+                ?: throw IOException("Fabric API вернул пустой профиль")
+
+            return JSONObject(body)
         }
     }
 }
