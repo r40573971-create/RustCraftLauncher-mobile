@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import kotlin.concurrent.thread
 
 private const val MANIFEST_URL =
     "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
@@ -336,16 +335,21 @@ private fun InstallDialog(
                     }
                 }
                 item {
-                    if (selectedLoader == "Vanilla") {
+                    if (selectedLoader == "Vanilla" || selectedLoader == "Fabric") {
                         DownloadCard(
                             versionId = selectedVersion,
                             versionUrl = versionUrl,
+                            fabricLoaderVersion = selectedFabricVersion.takeIf { selectedLoader == "Fabric" },
                             showCard = false,
-                            buttonLabel = "Скачать и установить"
+                            buttonLabel = if (selectedLoader == "Fabric") {
+                                "Установить Fabric"
+                            } else {
+                                "Скачать и установить"
+                            }
                         )
                     } else {
                         Text(
-                            "Выбор $selectedLoader доступен. Установка этого загрузчика будет добавлена следующим этапом; сейчас скачивание доступно для Vanilla.",
+                            "Выбор $selectedLoader доступен. Установка этого загрузчика будет добавлена следующим этапом; сейчас скачивание доступно для Vanilla и Fabric.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {

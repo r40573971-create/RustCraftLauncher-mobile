@@ -23,7 +23,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
 
     @Volatile private var downloader: GameDownloader? = null
 
-    fun start(versionUrl: String) {
+    fun start(versionUrl: String, fabricLoaderVersion: String? = null) {
         if (_state.value.running) return
         val game = GameDownloader(File(getApplication<Application>().filesDir, "minecraft"))
         downloader = game
@@ -32,7 +32,7 @@ class DownloadViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    game.download(versionUrl) { update ->
+                    game.download(versionUrl, fabricLoaderVersion) { update ->
                         _state.value = _state.value.copy(progress = update)
                     }
                 }
