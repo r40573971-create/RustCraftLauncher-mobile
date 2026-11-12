@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,6 +20,8 @@ import org.json.JSONObject
 
 private const val MANIFEST_URL =
     "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+private const val MANIFEST_PREFS = "minecraft_manifest_cache"
+private const val MANIFEST_CACHE_KEY = "manifest_json"
 
 private data class VersionInfo(val id: String, val url: String, val kind: String = "release")
 
@@ -52,6 +55,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun RustCraftApp() {
+    val context = LocalContext.current
     val nativeStatus = remember { RustBridge.status() }
     var selectedVersion by rememberSaveable { mutableStateOf("1.21.8") }
     var selectedLoader by rememberSaveable { mutableStateOf("Vanilla") }
@@ -63,11 +67,15 @@ private fun RustCraftApp() {
     var loadFailed by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences(MANIFEST_PREFS, android.content.Context.MODE_PRIVATE)
+        manifestJson = prefs.getString(MANIFEST_CACHE_KEY, null)
         try {
-            manifestJson = withContext(Dispatchers.IO) { httpGetText(MANIFEST_URL) }
+            val fresh = withContext(Dispatchers.IO) { httpGetText(MANIFEST_URL) }
+            manifestJson = fresh
+            prefs.edit().putString(MANIFEST_CACHE_KEY, fresh).apply()
             loadFailed = false
         } catch (_: Exception) {
-            loadFailed = true
+            loadFailed = manifestJson == null
         }
     }
 
@@ -141,7 +149,7 @@ private fun RustCraftApp() {
                     )
                 }
                 if (loadFailed) {
-                    item { Text("Не удалось загрузить список версий. Проверь интернет-соединение.") }
+                    item { Text("Не удалось обновить список версий. Показаны сохранённые версии, если они есть.") }
                 }
                 item {
                     Card {
@@ -207,6 +215,7 @@ private fun InstallDialog(
     onLoaderChange: (String) -> Unit, onFilterChange: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var fabricVersions by remember { mutableStateOf<List<FabricLoaderVersion>>(emptyList()) }
     var selectedFabricVersion by rememberSaveable { mutableStateOf("") }
     var fabricLoading by remember { mutableStateOf(false) }
@@ -214,19 +223,26 @@ private fun InstallDialog(
 
     LaunchedEffect(selectedVersion, selectedLoader) {
         if (selectedLoader == "Fabric") {
+            val cached = withContext(Dispatchers.IO) {
+                FabricMeta.getCachedLoaderVersions(context, selectedVersion)
+            }
+            fabricVersions = cached
+            selectedFabricVersion = cached.firstOrNull()?.version ?: ""
             fabricLoading = true
             fabricError = ""
-            fabricVersions = emptyList()
-            selectedFabricVersion = ""
             try {
-                val result = withContext(Dispatchers.IO) {
-                    FabricMeta.getLoaderVersions(selectedVersion)
+                val fresh = withContext(Dispatchers.IO) {
+                    FabricMeta.refreshLoaderVersions(context, selectedVersion)
                 }
-                fabricVersions = result
-                selectedFabricVersion = result.firstOrNull()?.version ?: ""
-                if (result.isEmpty()) fabricError = "Совместимые версии Fabric не найдены"
+                fabricVersions = fresh
+                if (selectedFabricVersion.isBlank()) {
+                    selectedFabricVersion = fresh.firstOrNull()?.version ?: ""
+                }
+                if (fresh.isEmpty()) fabricError = "Совместимые версии Fabric не найдены"
             } catch (e: Exception) {
-                fabricError = e.message ?: "Не удалось получить версии Fabric"
+                if (cached.isEmpty()) {
+                    fabricError = e.message ?: "Не удалось получить версии Fabric"
+                }
             } finally {
                 fabricLoading = false
             }
@@ -330,11 +346,11 @@ private fun InstallDialog(
                     Text("Версия загрузчика", style = MaterialTheme.typography.titleMedium)
                     when {
                         selectedLoader == "Vanilla" -> Text("Не требуется")
-                        selectedLoader == "Fabric" && fabricLoading -> {
+                        selectedLoader == "Fabric" && fabricLoading && fabricVersions.isEmpty() -> {
                             CircularProgressIndicator()
                             Text("Загружаем совместимые версии Fabric…")
                         }
-                        selectedLoader == "Fabric" && fabricError.isNotEmpty() -> {
+                        selectedLoader == "Fabric" && fabricError.isNotEmpty() && fabricVersions.isEmpty() -> {
                             Text(fabricError, color = MaterialTheme.colorScheme.error)
                         }
                         selectedLoader == "Fabric" && fabricVersions.isNotEmpty() -> {
@@ -353,6 +369,7 @@ private fun InstallDialog(
                                     }
                                 }
                             }
+                            if (fabricLoading) Text("Проверяем обновления…", style = MaterialTheme.typography.bodySmall)
                         }
                         else -> Text("Каталог этого загрузчика добавим следующим этапом.")
                     }
