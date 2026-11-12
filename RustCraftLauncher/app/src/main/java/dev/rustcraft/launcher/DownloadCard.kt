@@ -11,11 +11,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 fun DownloadCard(
     versionId: String,
     versionUrl: String?,
+    fabricLoaderVersion: String? = null,
     showCard: Boolean = true,
     buttonLabel: String = "Скачать $versionId"
 ) {
     val downloadViewModel: DownloadViewModel = viewModel()
     val state by downloadViewModel.state.collectAsState()
+    val fabricChosen = fabricLoaderVersion != null
+    val canStart = !state.running && versionUrl != null &&
+        RustBridge.isLoaded && (!fabricChosen || !fabricLoaderVersion.isNullOrBlank())
 
     @Composable
     fun Content() {
@@ -23,9 +27,13 @@ fun DownloadCard(
             Modifier.padding(if (showCard) 16.dp else 0.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Загрузка игры", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Версия $versionId скачается в память приложения. Это может занять несколько сотен МБ, лучше по Wi-Fi.",
+                if (fabricChosen) "Установка Fabric" else "Загрузка игры",
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                if (fabricChosen) "Minecraft $versionId · Fabric Loader $fabricLoaderVersion"
+                else "Версия $versionId скачается в память приложения. Это может занять несколько сотен МБ, лучше по Wi-Fi.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -46,10 +54,21 @@ fun DownloadCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            if (fabricChosen && fabricLoaderVersion.isNullOrBlank()) {
+                Text(
+                    "Сначала дождись списка версий Fabric и выбери версию загрузчика.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
-                    enabled = !state.running && versionUrl != null && RustBridge.isLoaded,
-                    onClick = { versionUrl?.let(downloadViewModel::start) }
+                    enabled = canStart,
+                    onClick = {
+                        versionUrl?.let { url ->
+                            downloadViewModel.start(url, fabricLoaderVersion)
+                        }
+                    }
                 ) { Text(buttonLabel) }
                 if (state.running) {
                     OutlinedButton(onClick = downloadViewModel::cancel) { Text("Отмена") }
@@ -57,6 +76,7 @@ fun DownloadCard(
             }
         }
     }
+
     if (showCard) Card { Content() } else Content()
 }
 
