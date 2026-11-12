@@ -56,6 +56,7 @@ private fun RustCraftApp() {
     var selectedVersion by rememberSaveable { mutableStateOf("1.21.8") }
     var selectedLoader by rememberSaveable { mutableStateOf("Vanilla") }
     var showInstallDialog by rememberSaveable { mutableStateOf(false) }
+    var showModsDialog by rememberSaveable { mutableStateOf(false) }
     var installFilter by rememberSaveable { mutableStateOf("Release") }
     var installLoader by rememberSaveable { mutableStateOf("Vanilla") }
     var manifestJson by remember { mutableStateOf<String?>(null) }
@@ -125,6 +126,20 @@ private fun RustCraftApp() {
                         contentPadding = PaddingValues(vertical = 18.dp)
                     ) { Text("Скачать", style = MaterialTheme.typography.titleMedium) }
                 }
+                item {
+                    OutlinedButton(
+                        onClick = { showModsDialog = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 16.dp)
+                    ) {
+                        Text("Моды")
+                    }
+                    Text(
+                        "Управление модами для $selectedVersion · $selectedLoader",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 if (loadFailed) {
                     item { Text("Не удалось загрузить список версий. Проверь интернет-соединение.") }
                 }
@@ -150,6 +165,14 @@ private fun RustCraftApp() {
                     )
                 }
             }
+        }
+
+        if (showModsDialog) {
+            ModManagerDialog(
+                minecraftVersion = selectedVersion,
+                loader = selectedLoader.lowercase(),
+                onDismiss = { showModsDialog = false }
+            )
         }
 
         if (showInstallDialog) {
@@ -341,11 +364,7 @@ private fun InstallDialog(
                             versionUrl = versionUrl,
                             fabricLoaderVersion = selectedFabricVersion.takeIf { selectedLoader == "Fabric" },
                             showCard = false,
-                            buttonLabel = if (selectedLoader == "Fabric") {
-                                "Установить Fabric"
-                            } else {
-                                "Скачать и установить"
-                            }
+                            buttonLabel = if (selectedLoader == "Fabric") "Установить Fabric" else "Скачать и установить"
                         )
                     } else {
                         Text(
