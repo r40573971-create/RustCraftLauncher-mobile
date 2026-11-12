@@ -1,5 +1,6 @@
 package dev.rustcraft.launcher
 
+import android.content.Context
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -16,6 +17,7 @@ data class FabricLoaderVersion(
 object FabricMeta {
     private const val BASE_URL =
         "https://bold-snow-a6b4.a66937094.workers.dev/v2"
+    private const val PREFS = "fabric_versions_cache"
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
@@ -23,7 +25,51 @@ object FabricMeta {
         .callTimeout(45, TimeUnit.SECONDS)
         .build()
 
-    fun getLoaderVersions(minecraftVersion: String): List<FabricLoaderVersion> {
+    private fun cacheKey(minecraftVersion: String) = "fabric_$minecraftVersion"
+
+    fun getCachedLoaderVersions(
+        context: Context,
+        minecraftVersion: String
+    ): List<FabricLoaderVersion> {
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(cacheKey(minecraftVersion), null) ?: return emptyList()
+
+        return runCatching {
+            val array = JSONArray(raw)
+            List(array.length()) { index ->
+                val item = array.getJSONObject(index)
+                FabricLoaderVersion(
+                    version = item.getString("version"),
+                    stable = item.optBoolean("stable", false)
+                )
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    fun refreshLoaderVersions(
+        context: Context,
+        minecraftVersion: String
+    ): List<FabricLoaderVersion> {
+        val result = fetchLoaderVersions(minecraftVersion)
+        val array = JSONArray()
+        result.forEach { item ->
+            array.put(
+                JSONObject()
+                    .put("version", item.version)
+                    .put("stable", item.stable)
+            )
+        }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(cacheKey(minecraftVersion), array.toString())
+            .apply()
+        return result
+    }
+
+    fun getLoaderVersions(minecraftVersion: String): List<FabricLoaderVersion> =
+        fetchLoaderVersions(minecraftVersion)
+
+    private fun fetchLoaderVersions(minecraftVersion: String): List<FabricLoaderVersion> {
         val encoded = URLEncoder.encode(minecraftVersion, "UTF-8")
             .replace("+", "%20")
 
