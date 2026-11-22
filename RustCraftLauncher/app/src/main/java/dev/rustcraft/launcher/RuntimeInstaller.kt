@@ -1,4 +1,3 @@
-
 package dev.rustcraft.launcher
 
 import java.io.File
@@ -44,7 +43,7 @@ class RuntimeInstaller(
                 onProgress = onProgress
             )
 
-            archiveExtractor.extractZip(
+            archiveExtractor.extractArchive(
                 archive = download.file,
                 destination = extractedRoot
             )
@@ -54,7 +53,6 @@ class RuntimeInstaller(
 
             validateRuntime(candidate)
 
-            // Preserve the previous installation until the new one is ready.
             if (backup.exists()) {
                 backup.deleteRecursively()
             }
@@ -66,14 +64,12 @@ class RuntimeInstaller(
             }
 
             if (!candidate.renameTo(runtimeRoot)) {
-                // Restore the previous installation if finalization fails.
                 if (backup.exists()) {
                     backup.renameTo(runtimeRoot)
                 }
                 error("Could not finalize runtime installation")
             }
 
-            // New installation is in place.
             backup.deleteRecursively()
 
             return runtimeRoot
