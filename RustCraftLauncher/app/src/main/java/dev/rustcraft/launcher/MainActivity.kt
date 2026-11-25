@@ -66,6 +66,29 @@ private fun RustCraftApp() {
     var manifestJson by remember { mutableStateOf<String?>(null) }
     var loadFailed by remember { mutableStateOf(false) }
 
+    val performanceSummary = remember(selectedVersion) {
+        runCatching {
+            when (val result = LaunchPreparation.prepare(context, selectedVersion)) {
+                is LaunchPreparation.Result.Ready -> PerformanceSummary(
+                    recommendedRamMb = result.launch.heapMb,
+                    jvmArgs = result.launch.jvmArguments,
+                    problems = result.launch.warnings
+                )
+                is LaunchPreparation.Result.Rejected -> PerformanceSummary(
+                    recommendedRamMb = null,
+                    jvmArgs = emptyList(),
+                    problems = result.errors + result.warnings
+                )
+            }
+        }.getOrElse {
+            PerformanceSummary(
+                recommendedRamMb = null,
+                jvmArgs = emptyList(),
+                problems = listOf(it.message ?: "Ошибка подготовки профиля")
+            )
+        }
+    }
+
     LaunchedEffect(Unit) {
         val prefs = context.getSharedPreferences(MANIFEST_PREFS, android.content.Context.MODE_PRIVATE)
         manifestJson = prefs.getString(MANIFEST_CACHE_KEY, null)
@@ -159,6 +182,13 @@ private fun RustCraftApp() {
                             Text("Native core: $nativeStatus")
                         }
                     }
+                }
+                item {
+                    PerformanceCard(
+                        minecraftVersion = selectedVersion,
+                        loader = selectedLoader,
+                        summary = performanceSummary
+                    )
                 }
                 item {
                     Button(
