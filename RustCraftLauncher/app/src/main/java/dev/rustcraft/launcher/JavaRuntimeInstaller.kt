@@ -5,11 +5,11 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import java.util.zip.ZipInputStream
 
 /**
  * Downloads a Java runtime described by RuntimeCatalog, verifies SHA-256,
- * extracts the ZIP safely and installs it into runtimesRoot/java-<major>.
+ * extracts it with RuntimeArchiveExtractor and installs it into
+ * runtimesRoot/java-<major>.
  * Throws IOException with a readable message if the catalog entry is not configured.
  */
 class JavaRuntimeInstaller(runtimesRoot: File) {
@@ -23,17 +23,23 @@ class JavaRuntimeInstaller(runtimesRoot: File) {
         } catch (e: IllegalArgumentException) {
             throw IOException(e.message ?: "Java $javaMajor не настроена")
         }
+        val fileName = pkg.fileName ?: throw IOException("Нет имени файла Java")
+
         root.mkdirs()
         val base = root.canonicalFile
         val finalDir = File(base, "java-$javaMajor")
         val tempDir = File(base, "java-$javaMajor.tmp")
-        val archive = File(base, "java-$javaMajor.zip.part")
+        // The extractor picks the format by file extension, so keep the real name.
+        val archive = File(base, "download-$javaMajor-$fileName")
         tempDir.deleteRecursively()
         archive.delete()
 
         try {
             download(pkg, archive, base, onProgress)
-            extract(archive, tempDir, onProgress)
+
+            if (cancelled) throw DownloadCancelled()
+            onProgress(DownloadProgress(0, 0, 0, 0, "Распаковка…"))
+            RuntimeArchiveExtractor.extractArchive(archive, tempDir)
 
             val runtimeRoot = findRuntimeRoot(tempDir)
                 ?: throw IOException("В архиве не найден bin/java")
@@ -89,45 +95,8 @@ class JavaRuntimeInstaller(runtimesRoot: File) {
             }
             val actual = digest.digest().joinToString("") { "%02x".format(it) }
             if (actual != expected) throw IOException("Не совпала контрольная сумма SHA-256")
-            onProgress(DownloadProgress(1, 1, done, total.coerceAtLeast(done), "Скачано"))
         } finally {
             connection.disconnect()
-        }
-    }
-
-    private fun extract(archive: File, dest: File, onProgress: (DownloadProgress) -> Unit) {
-        dest.mkdirs()
-        val destRoot = dest.canonicalFile
-        var files = 0
-        var written = 0L
-        ZipInputStream(archive.inputStream().buffered()).use { zip ->
-            while (true) {
-                val entry = zip.nextEntry ?: break
-                if (cancelled) throw DownloadCancelled()
-                val out = File(destRoot, entry.name).canonicalFile
-                if (!out.path.startsWith(destRoot.path + File.separator)) {
-                    throw IOException("Небезопасный путь в архиве: ${entry.name}")
-                }
-                if (entry.isDirectory) {
-                    out.mkdirs()
-                    continue
-                }
-                out.parentFile?.mkdirs()
-                out.outputStream().use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val n = zip.read(buffer)
-                        if (n < 0) break
-                        written += n
-                        if (written > MAX_EXTRACTED_BYTES) throw IOException("Архив слишком большой")
-                        output.write(buffer, 0, n)
-                    }
-                }
-                files++
-                if (files % 50 == 0) {
-                    onProgress(DownloadProgress(0, 0, 0, 0, "Распаковка… $files файлов"))
-                }
-            }
         }
     }
 
@@ -141,9 +110,5 @@ class JavaRuntimeInstaller(runtimesRoot: File) {
         File(runtimeRoot, "lib").walkTopDown()
             .filter { it.isFile && it.name == "jspawnhelper" }
             .forEach { it.setExecutable(true, false) }
-    }
-
-    private companion object {
-        const val MAX_EXTRACTED_BYTES = 1_500_000_000L
     }
 }

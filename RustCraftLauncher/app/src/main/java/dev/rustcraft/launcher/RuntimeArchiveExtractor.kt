@@ -58,7 +58,7 @@ object RuntimeArchiveExtractor {
                     ensureDirectory(root, output)
                 } else {
                     ensureDirectory(root, output.parentFile!!)
-                    checkNotSymlink(output)
+                    checkSymlink(output)
 
                     FileOutputStream(output).use { out ->
                         val buffer = ByteArray(32 * 1024)
@@ -74,7 +74,8 @@ object RuntimeArchiveExtractor {
                         }
                     }
 
-                    if (entry.name.endsWith("/bin/java") ||
+                    if (entry.name == "bin/java" ||
+                        entry.name.endsWith("/bin/java") ||
                         entry.name.endsWith("/bin/java.exe")) {
                         output.setExecutable(true, false)
                     }
